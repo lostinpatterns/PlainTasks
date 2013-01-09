@@ -5,7 +5,8 @@ import re
 import sublime
 import sublime_plugin
 from datetime import datetime
-
+import urllib
+import getpass
 
 class PlainTasksBase(sublime_plugin.TextCommand):
     def run(self, edit):
@@ -70,6 +71,18 @@ class PlainTasksCompleteCommand(PlainTasksBase):
         for region in self.view.sel():
             line = self.view.line(region)
             line_contents = self.view.substr(line).rstrip()
+
+            #
+            # this part added by me
+            #
+            project_name = None
+            project_pos = self.view.find('@project ', 0, sublime.LITERAL)
+            if project_pos:
+                project_line = self.view.line(project_pos)
+                project_name = self.view.substr(project_line).rstrip()
+                project_name = project_name.replace('@project ', '')
+            self.post_to_grove(line_contents[2:], project_name)
+
             rom = '^(\s*)' + re.escape(self.open_tasks_bullet) + '\s*(.*)$'
             rdm = '^(\s*)' + re.escape(self.done_tasks_bullet) + '\s*([^\b]*?)\s*(%s)?[\(\)\d\w,\.:\-/ ]*\s*$' % self.done_tag
             rcm = '^(\s*)' + re.escape(self.canc_tasks_bullet) + '\s*([^\b]*?)\s*(%s)?[\(\)\d\w,\.:\-/ ]*\s*$' % self.canc_tag
@@ -97,6 +110,21 @@ class PlainTasksCompleteCommand(PlainTasksBase):
             ofs = ind * offset
             new_pt = sublime.Region(pt.a + ofs, pt.b + ofs)
             self.view.sel().add(new_pt)
+
+    def post_to_grove(self, task, project):
+        username = getpass.getuser()
+        grove_key = self.view.settings().get('grove_key')
+
+        message = 'done: ' + task + ' - ' + username
+        if project is not None:
+            message = message + ' (' + project + ')'
+
+        params = {}
+        params['service'] = 'TaskBot'
+        params['message'] = message
+        params = urllib.urlencode(params)
+
+        urllib.urlopen('https://grove.io/api/notice/' + grove_key, params)
 
 
 class PlainTasksCancelCommand(PlainTasksBase):
